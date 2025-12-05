@@ -9,11 +9,14 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Initialize Gemini (API Key comes from Vercel Environment Variables)
-// Supports GEMINI_BASE_URL env var for reverse proxies (e.g. usage in China)
+// Initialize Gemini
+// 1. Try to get GEMINI_BASE_URL from Environment Variables
+// 2. If not found, fallback to the user's Cloudflare Worker (Hardcoded for convenience)
+const BASE_URL = process.env.GEMINI_BASE_URL || 'https://geminibaseurl.3352152798.workers.dev';
+
 const ai = new GoogleGenAI({ 
   apiKey: process.env.API_KEY,
-  baseUrl: process.env.GEMINI_BASE_URL 
+  baseUrl: BASE_URL 
 });
 
 const promptResponseSchema = {
