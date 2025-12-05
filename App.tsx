@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 // REMOVED: import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { MediaType, OptimizationMode, PromptResult, HistoryItem, InterfaceLanguage, OutputLanguage, TaskMode, Preset } from './types';
+import { MediaType, OptimizationMode, PromptResult, HistoryItem, InterfaceLanguage, OutputLanguage, TaskMode, Preset, ModelProvider, ModelConfig } from './types';
 
 // --- Icons ---
 const SparkIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -89,6 +89,13 @@ const ExclamationCircleIcon = ({ className = "w-5 h-5" }: { className?: string }
   </svg>
 );
 
+const Cog6ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
 
 // --- Translations ---
 
@@ -97,6 +104,7 @@ const translations = {
     appTitle: "提示词炼金术",
     historyTitle: "历史记录",
     presetsTitle: "预设风格",
+    settingsTitle: "模型设置",
     noHistory: "暂无历史记录",
     noPresets: "暂无预设，点击下方按钮保存当前提示词。",
     startMagic: "开始创造魔法！",
@@ -136,12 +144,22 @@ const translations = {
     outEN: "English",
     outJP: "日本語",
     outKR: "한국어",
-    fallbackToast: "深度思考超时，已自动切换为快速模式"
+    fallbackToast: "深度思考超时，已自动切换为快速模式",
+    textModel: "文本模型 (提示词优化)",
+    visionModel: "视觉模型 (图片反推)",
+    provider: "提供商",
+    modelName: "模型名称",
+    apiKey: "API Key",
+    baseUrl: "API Base URL",
+    saveSettings: "保存设置",
+    default: "默认",
+    custom: "自定义"
   },
   [InterfaceLanguage.EN]: {
     appTitle: "Prompt Alchemy",
     historyTitle: "History",
     presetsTitle: "Presets",
+    settingsTitle: "Settings",
     noHistory: "No history yet",
     noPresets: "No presets yet. Save your current prompt.",
     startMagic: "Start creating magic!",
@@ -181,7 +199,16 @@ const translations = {
     outEN: "English",
     outJP: "Japanese",
     outKR: "Korean",
-    fallbackToast: "Thinking mode timed out, switched to Fast mode automatically"
+    fallbackToast: "Thinking mode timed out, switched to Fast mode automatically",
+    textModel: "Text Model (Optimize)",
+    visionModel: "Vision Model (Reverse)",
+    provider: "Provider",
+    modelName: "Model Name",
+    apiKey: "API Key",
+    baseUrl: "API Base URL",
+    saveSettings: "Save Settings",
+    default: "Default",
+    custom: "Custom"
   }
 };
 
@@ -226,6 +253,98 @@ const FallbackToast = ({ message, visible }: { message: string, visible: boolean
             <div className="bg-orange-500/90 text-white px-4 py-3 rounded-lg shadow-xl backdrop-blur-md flex items-center gap-3 border border-orange-400/50 max-w-sm">
                 <ExclamationCircleIcon className="w-5 h-5 flex-shrink-0" />
                 <span className="text-sm font-medium">{message}</span>
+            </div>
+        </div>
+    );
+};
+
+const SettingsModal = ({ isOpen, onClose, lang, textConfig, setTextConfig, visionConfig, setVisionConfig }: { 
+    isOpen: boolean, 
+    onClose: () => void, 
+    lang: InterfaceLanguage,
+    textConfig: ModelConfig,
+    setTextConfig: (c: ModelConfig) => void,
+    visionConfig: ModelConfig,
+    setVisionConfig: (c: ModelConfig) => void
+}) => {
+    if (!isOpen) return null;
+    const t = translations[lang];
+
+    const ConfigSection = ({ title, config, setConfig }: { title: string, config: ModelConfig, setConfig: (c: ModelConfig) => void }) => (
+        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 space-y-3">
+            <h4 className="font-bold text-indigo-300 text-sm uppercase tracking-wide flex items-center gap-2">
+                {title}
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs text-slate-400 mb-1">{t.provider}</label>
+                    <select 
+                        value={config.provider}
+                        onChange={(e) => setConfig({ ...config, provider: e.target.value as ModelProvider })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+                    >
+                        <option value={ModelProvider.GOOGLE}>Google GenAI (Gemini)</option>
+                        <option value={ModelProvider.OPENAI}>OpenAI Compatible</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-xs text-slate-400 mb-1">{t.modelName}</label>
+                    <input 
+                        type="text"
+                        value={config.modelName}
+                        onChange={(e) => setConfig({ ...config, modelName: e.target.value })}
+                        placeholder={config.provider === ModelProvider.GOOGLE ? "gemini-2.5-flash" : "gpt-4o"}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none placeholder-slate-600"
+                    />
+                </div>
+                <div className="md:col-span-2">
+                    <label className="block text-xs text-slate-400 mb-1">{t.baseUrl} <span className="text-slate-600">(Optional)</span></label>
+                    <input 
+                        type="text"
+                        value={config.baseUrl}
+                        onChange={(e) => setConfig({ ...config, baseUrl: e.target.value })}
+                        placeholder={config.provider === ModelProvider.GOOGLE ? "https://generativelanguage.googleapis.com" : "https://api.openai.com"}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none placeholder-slate-600"
+                    />
+                </div>
+                 <div className="md:col-span-2">
+                    <label className="block text-xs text-slate-400 mb-1">{t.apiKey} <span className="text-slate-600">(Leave empty to use server default for Google)</span></label>
+                    <input 
+                        type="password"
+                        value={config.apiKey}
+                        onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
+                        placeholder="sk-..."
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none placeholder-slate-600 font-mono"
+                    />
+                </div>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in-up">
+            <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+                <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 rounded-t-2xl">
+                    <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 flex items-center gap-2">
+                        <Cog6ToothIcon /> {t.settingsTitle}
+                    </h2>
+                    <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+                        <XIcon className="w-6 h-6" />
+                    </button>
+                </div>
+                <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
+                    <ConfigSection title={t.textModel} config={textConfig} setConfig={setTextConfig} />
+                    <ConfigSection title={t.visionModel} config={visionConfig} setConfig={setVisionConfig} />
+                </div>
+                <div className="p-4 border-t border-slate-800 bg-slate-950/30 rounded-b-2xl text-center">
+                    <button 
+                        onClick={onClose}
+                        className="px-8 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-indigo-500/20"
+                    >
+                        {t.saveSettings}
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -280,6 +399,15 @@ const HelpModal = ({ isOpen, onClose, lang }: { isOpen: boolean, onClose: () => 
             调用 Gemini 2.0 Thinking 模型。它会进行复杂的推理，适合需要严谨逻辑、精确分镜的视频脚本。
           </div>
         </div>
+      </section>
+      
+      <section>
+          <h3 className="text-lg font-bold text-slate-400 mb-2 flex items-center gap-2">
+            <Cog6ToothIcon /> 模型设置
+          </h3>
+          <p className="text-slate-300 text-sm leading-relaxed">
+            点击侧边栏的齿轮图标，您可以自定义后端调用的模型。支持切换 Google Gemini 或 OpenAI Compatible (如 GPT-4o, DeepSeek 等) 模型，并可分别设置文本生成和视觉反推所使用的模型。
+          </p>
       </section>
 
        <section>
@@ -338,6 +466,15 @@ const HelpModal = ({ isOpen, onClose, lang }: { isOpen: boolean, onClose: () => 
           </div>
         </div>
       </section>
+      
+      <section>
+          <h3 className="text-lg font-bold text-slate-400 mb-2 flex items-center gap-2">
+            <Cog6ToothIcon /> Model Settings
+          </h3>
+          <p className="text-slate-300 text-sm leading-relaxed">
+             Click the gear icon in the sidebar to customize backend models. You can switch between Google Gemini or OpenAI Compatible providers (e.g., GPT-4o, DeepSeek) and configure Text Generation and Vision Analysis models separately.
+          </p>
+      </section>
 
       <section>
         <h3 className="text-lg font-bold text-blue-400 mb-2 flex items-center gap-2">
@@ -380,6 +517,20 @@ const HelpModal = ({ isOpen, onClose, lang }: { isOpen: boolean, onClose: () => 
 
 // --- App Component ---
 
+const DEFAULT_TEXT_CONFIG: ModelConfig = {
+    provider: ModelProvider.GOOGLE,
+    modelName: 'gemini-2.5-flash',
+    apiKey: '',
+    baseUrl: ''
+};
+
+const DEFAULT_VISION_CONFIG: ModelConfig = {
+    provider: ModelProvider.GOOGLE,
+    modelName: 'gemini-2.5-flash',
+    apiKey: '',
+    baseUrl: ''
+};
+
 export default function App() {
   const [prompt, setPrompt] = useState('');
   const [mediaType, setMediaType] = useState<MediaType>(MediaType.IMAGE);
@@ -392,6 +543,10 @@ export default function App() {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Model Settings State
+  const [textModelConfig, setTextModelConfig] = useState<ModelConfig>(DEFAULT_TEXT_CONFIG);
+  const [visionModelConfig, setVisionModelConfig] = useState<ModelConfig>(DEFAULT_VISION_CONFIG);
+
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PromptResult | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -400,40 +555,41 @@ export default function App() {
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('HISTORY');
   const [isMobile, setIsMobile] = useState(false);
   
-  // Help State
+  // Modal States
   const [helpOpen, setHelpOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   
   // Fallback Toast State
   const [showFallbackToast, setShowFallbackToast] = useState(false);
 
   const t = translations[interfaceLang];
 
-  // Load history & presets on mount
+  // Load data & settings on mount
   useEffect(() => {
     const savedHistory = localStorage.getItem('prompt_alchemy_history');
     if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory));
-      } catch (e) {
-        console.error("Failed to load history", e);
-        localStorage.removeItem('prompt_alchemy_history');
-      }
+      try { setHistory(JSON.parse(savedHistory)); } catch (e) { localStorage.removeItem('prompt_alchemy_history'); }
     }
     
     const savedPresets = localStorage.getItem('prompt_alchemy_presets');
     if (savedPresets) {
-        try {
-            setPresets(JSON.parse(savedPresets));
-        } catch (e) {
-            console.error("Failed to load presets", e);
-            localStorage.removeItem('prompt_alchemy_presets');
-        }
+        try { setPresets(JSON.parse(savedPresets)); } catch (e) { localStorage.removeItem('prompt_alchemy_presets'); }
     }
 
-    // Load interface language pref
     const savedLang = localStorage.getItem('prompt_alchemy_lang');
     if (savedLang && (savedLang === 'CN' || savedLang === 'EN')) {
       setInterfaceLang(savedLang as InterfaceLanguage);
+    }
+    
+    // Load Model Configs
+    const savedTextConfig = localStorage.getItem('prompt_alchemy_text_config');
+    if (savedTextConfig) {
+        try { setTextModelConfig({ ...DEFAULT_TEXT_CONFIG, ...JSON.parse(savedTextConfig) }); } catch (e) {}
+    }
+    
+    const savedVisionConfig = localStorage.getItem('prompt_alchemy_vision_config');
+    if (savedVisionConfig) {
+         try { setVisionModelConfig({ ...DEFAULT_VISION_CONFIG, ...JSON.parse(savedVisionConfig) }); } catch (e) {}
     }
 
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -444,26 +600,27 @@ export default function App() {
 
   // Save history
   useEffect(() => {
-    try {
-      localStorage.setItem('prompt_alchemy_history', JSON.stringify(history));
-    } catch (e) {
-      console.error("Failed to save history.", e);
-    }
+    try { localStorage.setItem('prompt_alchemy_history', JSON.stringify(history)); } catch (e) {}
   }, [history]);
 
   // Save presets
   useEffect(() => {
-    try {
-        localStorage.setItem('prompt_alchemy_presets', JSON.stringify(presets));
-    } catch (e) {
-        console.error("Failed to save presets.", e);
-    }
+    try { localStorage.setItem('prompt_alchemy_presets', JSON.stringify(presets)); } catch (e) {}
   }, [presets]);
 
   // Save language preference
   useEffect(() => {
     localStorage.setItem('prompt_alchemy_lang', interfaceLang);
   }, [interfaceLang]);
+  
+  // Save model configs
+  useEffect(() => {
+      localStorage.setItem('prompt_alchemy_text_config', JSON.stringify(textModelConfig));
+  }, [textModelConfig]);
+  
+  useEffect(() => {
+      localStorage.setItem('prompt_alchemy_vision_config', JSON.stringify(visionModelConfig));
+  }, [visionModelConfig]);
 
   // Reset result when switching tasks
   useEffect(() => {
@@ -533,6 +690,9 @@ export default function App() {
     setResult(null);
     setShowFallbackToast(false); // Reset toast
 
+    // Determine which config to use based on task
+    const activeConfig = taskMode === TaskMode.REVERSE ? visionModelConfig : textModelConfig;
+
     // Create an abort controller for the fetch request
     const controller = new AbortController();
     // Increase client side timeout to 90s to handle "Thinking" models which are slow
@@ -565,7 +725,8 @@ export default function App() {
           taskMode,
           outputLang,
           interfaceLang,
-          uploadedImage: payloadImage // Use the resized image
+          uploadedImage: payloadImage, // Use the resized image
+          modelConfig: activeConfig // Send the specific config
         }),
         signal: controller.signal
       });
@@ -660,6 +821,17 @@ export default function App() {
       {/* Help Modal */}
       <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} lang={interfaceLang} />
       
+      {/* Settings Modal */}
+      <SettingsModal 
+        isOpen={settingsOpen} 
+        onClose={() => setSettingsOpen(false)} 
+        lang={interfaceLang}
+        textConfig={textModelConfig}
+        setTextConfig={setTextModelConfig}
+        visionConfig={visionModelConfig}
+        setVisionConfig={setVisionModelConfig}
+      />
+      
       {/* Fallback Toast */}
       <FallbackToast message={t.fallbackToast} visible={showFallbackToast} />
 
@@ -685,7 +857,7 @@ export default function App() {
           <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
             {t.appTitle}
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
              {!isMobile && (
                 <button 
                 onClick={toggleInterfaceLang} 
@@ -696,14 +868,21 @@ export default function App() {
                 </button>
             )}
              <button 
+                onClick={() => setSettingsOpen(true)}
+                className="text-slate-400 hover:text-indigo-400 transition-colors p-1"
+                title={translations[interfaceLang].settingsTitle}
+            >
+                <Cog6ToothIcon />
+            </button>
+             <button 
                 onClick={() => setHelpOpen(true)}
-                className="text-slate-400 hover:text-indigo-400 transition-colors"
+                className="text-slate-400 hover:text-indigo-400 transition-colors p-1"
                 title={translations[interfaceLang].helpTitle}
             >
                 <QuestionMarkCircleIcon />
             </button>
              {isMobile && (
-                <button onClick={() => setSidebarOpen(false)} className="text-slate-400">
+                <button onClick={() => setSidebarOpen(false)} className="text-slate-400 p-1">
                 <XIcon />
                 </button>
             )}
@@ -973,6 +1152,7 @@ export default function App() {
                       <SparkIcon className="w-4 h-4" />
                       <span className="hidden sm:inline">{t.fast}</span>
                     </button>
+                    {/* Only show Thinking mode if using Google (Gen 2.5 feature) - or let backend degrade gracefully */}
                     <button
                       onClick={() => setMode(OptimizationMode.THINKING)}
                       className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${mode === OptimizationMode.THINKING ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}

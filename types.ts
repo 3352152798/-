@@ -26,6 +26,18 @@ export enum OutputLanguage {
   EN = 'English'
 }
 
+export enum ModelProvider {
+  GOOGLE = 'GOOGLE',
+  OPENAI = 'OPENAI'
+}
+
+export interface ModelConfig {
+  provider: ModelProvider;
+  modelName: string;
+  apiKey: string;
+  baseUrl: string;
+}
+
 export interface PromptResult {
   optimizedPrompt: string;
   explanation: string;
