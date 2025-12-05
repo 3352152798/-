@@ -66,6 +66,15 @@ const buildRequestData = (body, modelName) => {
       3. **Enhance** with technical keywords appropriate for high-end rendering.
       4. **Structure** the prompt logically: [Subject] + [Environment] + [Lighting] + [Camera] + [Style].
 
+      ### VIDEO STYLE GUIDELINES
+      For video generation prompts, do NOT limit yourself to generic "Cinematic" styles. 
+      Actively explore and apply diverse styles that best fit the subject, such as:
+      - **Animation**: 3D Render (Pixar/Dreamworks style), 2D Anime (Ghibli/Makoto Shinkai), Claymation, Stop Motion.
+      - **Artistic**: Watercolor, Oil Painting, Ink Wash, Glitch Art, Pixel Art, Synthwave/Cyberpunk.
+      - **Film**: Vintage 8mm/16mm, VHS, Noir, Wes Anderson symmetrical, Documentary, Hand-held footage.
+      - **Abstract**: Fractal, Kaleidoscopic, Fluid simulation.
+      Select the most impactful style for the specific concept.
+
       ### LANGUAGE RULES
       1. **Output Language**: The 'optimizedPrompt' MUST be in **${outputLang}**.
       2. **Explanation Language**: The 'explanation' and 'technicalDetails' MUST be in **${explainLang}**.
@@ -85,14 +94,21 @@ const buildRequestData = (body, modelName) => {
            - **Direct the Action**: Describe specific movements (micro-expressions, walking, environmental shifts).
            - **Direct the Camera**: Use precise terminology (Dolly Zoom, Truck Left, Crane Up, Rack Focus).
 
+           ### STYLE DIVERSITY
+           Do not default to "Cinematic" if the image suggests otherwise. accurately identify and describe the style:
+           - If it looks like **Anime**, describe it as high-quality anime (e.g., Ufotable, Kyoto Animation).
+           - If it looks like **3D**, describe the render engine (Unreal Engine 5, Octane).
+           - If it looks **Vintage**, describe the film stock (Kodak Portra, VHS tape grain).
+           - Be specific about the medium (Oil painting, Digital Art, Clay).
+
            ### VISUAL ANALYSIS & EXTRAPOLATION
            1. **Scene & Setting**: Establish the location and time period immediately.
-           2. **Lighting & Mood**: Describe how the light interacts with the subject (volumetric, chiaroscuro, practical lights).
-           3. **Dynamic Elements**: Wind, rain, traffic, particle effects, crowd movement.
+           2. **Lighting & Mood**: Describe how the light interacts with the subject.
+           3. **Dynamic Elements**: Wind, rain, traffic, particle effects.
 
            ### PROMPT STRUCTURE (Sora/Veo Style)
            Construct the prompt as a fluid narrative description:
-           "[Cinematic Style] of [Subject] doing [Specific Action] in [Environment]. [Camera Movement] reveals [New Detail]. Lighting is [Lighting Type]. Atmosphere is [Mood]. Technical specs: [Resolution, FPS, Lens]."
+           "[Specific Style/Medium] of [Subject] doing [Specific Action] in [Environment]. [Camera Movement] reveals [New Detail]. Lighting is [Lighting Type]. Atmosphere is [Mood]. Technical specs: [Resolution, FPS, Lens]."
 
            ### LANGUAGE RULES
            1. **Output Language**: The 'optimizedPrompt' MUST be in **${outputLang}**.
@@ -196,8 +212,9 @@ app.post('/api/generate', async (req, res) => {
             const fallbackResponse = await ai.models.generateContent(fallbackRequestData);
             const result = JSON.parse(fallbackResponse.text);
             
-            // Annotate explanation to inform user of fallback
+            // Annotate explanation AND set flag
             result.explanation = `(Note: Deep Thinking timed out, switched to Fast mode automatically.) ${result.explanation}`;
+            result.isFallback = true;
             
             res.json(result);
         } else {

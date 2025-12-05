@@ -31,6 +31,7 @@ export interface PromptResult {
   explanation: string;
   technicalDetails: string; // Camera settings, aspect ratio suggestions, etc.
   negativePrompt?: string;
+  isFallback?: boolean; // New flag to indicate auto-downgrade
 }
 
 export interface PromptOptions {

@@ -83,6 +83,12 @@ const QuestionMarkCircleIcon = ({ className = "w-5 h-5" }: { className?: string 
   </svg>
 );
 
+const ExclamationCircleIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+  </svg>
+);
+
 
 // --- Translations ---
 
@@ -129,7 +135,8 @@ const translations = {
     outCN: "中文",
     outEN: "English",
     outJP: "日本語",
-    outKR: "한국어"
+    outKR: "한국어",
+    fallbackToast: "深度思考超时，已自动切换为快速模式"
   },
   [InterfaceLanguage.EN]: {
     appTitle: "Prompt Alchemy",
@@ -173,7 +180,8 @@ const translations = {
     outCN: "Chinese",
     outEN: "English",
     outJP: "Japanese",
-    outKR: "Korean"
+    outKR: "Korean",
+    fallbackToast: "Thinking mode timed out, switched to Fast mode automatically"
   }
 };
 
@@ -209,7 +217,19 @@ const resizeImage = (base64Str: string, maxWidth = 300): Promise<string> => {
 
 type SidebarTab = 'HISTORY' | 'PRESETS';
 
-// --- Help Component ---
+// --- Components ---
+
+const FallbackToast = ({ message, visible }: { message: string, visible: boolean }) => {
+    if (!visible) return null;
+    return (
+        <div className="fixed top-20 right-4 z-50 animate-fade-in-up">
+            <div className="bg-orange-500/90 text-white px-4 py-3 rounded-lg shadow-xl backdrop-blur-md flex items-center gap-3 border border-orange-400/50 max-w-sm">
+                <ExclamationCircleIcon className="w-5 h-5 flex-shrink-0" />
+                <span className="text-sm font-medium">{message}</span>
+            </div>
+        </div>
+    );
+};
 
 const HelpModal = ({ isOpen, onClose, lang }: { isOpen: boolean, onClose: () => void, lang: InterfaceLanguage }) => {
   if (!isOpen) return null;
@@ -382,6 +402,9 @@ export default function App() {
   
   // Help State
   const [helpOpen, setHelpOpen] = useState(false);
+  
+  // Fallback Toast State
+  const [showFallbackToast, setShowFallbackToast] = useState(false);
 
   const t = translations[interfaceLang];
 
@@ -508,6 +531,7 @@ export default function App() {
 
     setLoading(true);
     setResult(null);
+    setShowFallbackToast(false); // Reset toast
 
     // Create an abort controller for the fetch request
     const controller = new AbortController();
@@ -552,6 +576,14 @@ export default function App() {
       }
 
       const parsedResult = await response.json() as PromptResult;
+      
+      // CHECK FOR FALLBACK
+      if (parsedResult.isFallback) {
+         setMode(OptimizationMode.FAST); // Visual update to match reality
+         setShowFallbackToast(true);
+         setTimeout(() => setShowFallbackToast(false), 2500); // Hide after 2.5s
+      }
+
       setResult(parsedResult);
       
       // Prepare Thumbnail for history (Smaller 200px)
@@ -627,6 +659,9 @@ export default function App() {
       
       {/* Help Modal */}
       <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} lang={interfaceLang} />
+      
+      {/* Fallback Toast */}
+      <FallbackToast message={t.fallbackToast} visible={showFallbackToast} />
 
       {/* Mobile Backdrop */}
       {isMobile && sidebarOpen && (
@@ -1017,9 +1052,18 @@ export default function App() {
                 
                 {/* Explanation Card */}
                 <div className="bg-slate-900/60 backdrop-blur-sm border border-slate-800 rounded-xl p-6">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-400 mb-3">
-                    {t.explanation}
-                  </h3>
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-400">
+                        {t.explanation}
+                    </h3>
+                    <button 
+                        onClick={() => copyToClipboard(result.explanation)}
+                        className="text-slate-500 hover:text-white transition-colors p-1"
+                        title={t.copy}
+                    >
+                        <CopyIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                   <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">
                     {result.explanation}
                   </p>
@@ -1027,9 +1071,18 @@ export default function App() {
 
                 {/* Technical Details Card */}
                 <div className="bg-slate-900/60 backdrop-blur-sm border border-slate-800 rounded-xl p-6">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-blue-400 mb-3">
-                    {t.technical}
-                  </h3>
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-blue-400">
+                        {t.technical}
+                    </h3>
+                    <button 
+                        onClick={() => copyToClipboard(result.technicalDetails)}
+                        className="text-slate-500 hover:text-white transition-colors p-1"
+                        title={t.copy}
+                    >
+                        <CopyIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                   <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">
                     {result.technicalDetails}
                   </p>
