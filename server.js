@@ -12,7 +12,11 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 // Initialize Gemini Client (Server-side only)
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Supports GEMINI_BASE_URL env var for reverse proxies (e.g. usage in China)
+const ai = new GoogleGenAI({ 
+  apiKey: process.env.API_KEY,
+  baseUrl: process.env.GEMINI_BASE_URL 
+});
 
 // --- Schemas & Constants ---
 

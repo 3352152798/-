@@ -1,3 +1,4 @@
+
 import express from 'express';
 import cors from 'cors';
 import { GoogleGenAI, Type } from '@google/genai';
@@ -9,8 +10,11 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 // Initialize Gemini (API Key comes from Vercel Environment Variables)
-// Note: On Vercel, process.env.API_KEY is populated from Project Settings
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Supports GEMINI_BASE_URL env var for reverse proxies (e.g. usage in China)
+const ai = new GoogleGenAI({ 
+  apiKey: process.env.API_KEY,
+  baseUrl: process.env.GEMINI_BASE_URL 
+});
 
 const promptResponseSchema = {
   type: Type.OBJECT,
