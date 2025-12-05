@@ -187,7 +187,7 @@ const buildRequestData = (body, modelName) => {
 
 app.post('/api/generate', async (req, res) => {
   try {
-    const { mode } = req.body;
+    const { mode, interfaceLang } = req.body;
     
     // PRIMARY ATTEMPT
     let modelName = mode === 'THINKING' ? 'gemini-3-pro-preview' : 'gemini-2.5-flash';
@@ -212,8 +212,13 @@ app.post('/api/generate', async (req, res) => {
             const fallbackResponse = await ai.models.generateContent(fallbackRequestData);
             const result = JSON.parse(fallbackResponse.text);
             
+            // Localize the fallback note
+            const note = interfaceLang === 'CN' 
+                ? "(注：深度思考模式响应超时，已自动切换为快速模式。)" 
+                : "(Note: Deep Thinking timed out, switched to Fast mode automatically.)";
+
             // Annotate explanation AND set flag
-            result.explanation = `(Note: Deep Thinking timed out, switched to Fast mode automatically.) ${result.explanation}`;
+            result.explanation = `${note}\n\n${result.explanation}`;
             result.isFallback = true;
             
             res.json(result);

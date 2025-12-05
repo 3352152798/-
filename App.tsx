@@ -1052,16 +1052,17 @@ export default function App() {
                 
                 {/* Explanation Card */}
                 <div className="bg-slate-900/60 backdrop-blur-sm border border-slate-800 rounded-xl p-6">
-                  <div className="flex justify-between items-start mb-3">
+                  <div className="flex justify-between items-center mb-3">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-400">
                         {t.explanation}
                     </h3>
                     <button 
                         onClick={() => copyToClipboard(result.explanation)}
-                        className="text-slate-500 hover:text-white transition-colors p-1"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-xs font-medium border border-slate-700"
                         title={t.copy}
                     >
-                        <CopyIcon className="w-4 h-4" />
+                        <CopyIcon className="w-3.5 h-3.5" />
+                        {t.copy}
                     </button>
                   </div>
                   <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">
@@ -1071,16 +1072,17 @@ export default function App() {
 
                 {/* Technical Details Card */}
                 <div className="bg-slate-900/60 backdrop-blur-sm border border-slate-800 rounded-xl p-6">
-                  <div className="flex justify-between items-start mb-3">
+                  <div className="flex justify-between items-center mb-3">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-blue-400">
                         {t.technical}
                     </h3>
                     <button 
                         onClick={() => copyToClipboard(result.technicalDetails)}
-                        className="text-slate-500 hover:text-white transition-colors p-1"
+                         className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-xs font-medium border border-slate-700"
                         title={t.copy}
                     >
-                        <CopyIcon className="w-4 h-4" />
+                        <CopyIcon className="w-3.5 h-3.5" />
+                        {t.copy}
                     </button>
                   </div>
                   <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">
@@ -1091,15 +1093,16 @@ export default function App() {
                 {/* Negative Prompt (Optional) */}
                 {result.negativePrompt && (
                   <div className="md:col-span-2 bg-slate-900/60 backdrop-blur-sm border border-slate-800 rounded-xl p-6">
-                    <div className="flex justify-between items-start mb-2">
+                    <div className="flex justify-between items-center mb-2">
                        <h3 className="text-sm font-bold uppercase tracking-wider text-red-400">
                         {t.negative}
                       </h3>
                       <button 
                         onClick={() => copyToClipboard(result.negativePrompt!)}
-                        className="text-slate-500 hover:text-white transition-colors"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-xs font-medium border border-slate-700"
                       >
-                        <CopyIcon className="w-3.5 h-3.5" />
+                         <CopyIcon className="w-3.5 h-3.5" />
+                         {t.copy}
                       </button>
                     </div>
                     <p className="font-mono text-xs text-slate-400 break-words">
