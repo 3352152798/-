@@ -1,0 +1,7 @@
+{
+  "name": "Prompt Alchemy",
+  "description": "Advanced AI prompt optimizer for image and video generation, featuring deep reasoning capabilities to transform simple ideas into professional-grade prompts.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
