@@ -385,9 +385,6 @@ export default function App() {
 
   const t = translations[interfaceLang];
 
-  // NOTE: GoogleGenAI Client removed. We now fetch from backend.
-  // const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
   // Load history & presets on mount
   useEffect(() => {
     const savedHistory = localStorage.getItem('prompt_alchemy_history');
@@ -512,10 +509,24 @@ export default function App() {
     setLoading(true);
     setResult(null);
 
+    // Create an abort controller for the fetch request
+    const controller = new AbortController();
+    // Increase client side timeout to 90s to handle "Thinking" models which are slow
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+
     try {
+      // PREPARE IMAGE PAYLOAD: Resize to avoid 413 Payload Too Large on Vercel
+      let payloadImage = uploadedImage;
+      if (taskMode === TaskMode.REVERSE && uploadedImage) {
+        try {
+           // 1024px is plenty for GenAI to understand context, but small enough (<500kb) for Vercel
+           payloadImage = await resizeImage(uploadedImage, 1024);
+        } catch (e) {
+           console.error("Failed to resize image for payload, sending original (might fail)", e);
+        }
+      }
+
       // Use the backend API
-      // In production, this URL should be your deployed backend URL.
-      // For local development, it assumes standard localhost:3000 or relative proxy.
       const apiUrl = '/api/generate'; 
 
       const response = await fetch(apiUrl, {
@@ -530,18 +541,20 @@ export default function App() {
           taskMode,
           outputLang,
           interfaceLang,
-          uploadedImage // Sends base64 string
+          uploadedImage: payloadImage // Use the resized image
         }),
+        signal: controller.signal
       });
 
       if (!response.ok) {
-        throw new Error(`API Error: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const parsedResult = await response.json() as PromptResult;
       setResult(parsedResult);
       
-      // Prepare Thumbnail for history
+      // Prepare Thumbnail for history (Smaller 200px)
       let thumbnail = undefined;
       if (taskMode === TaskMode.REVERSE && uploadedImage) {
           try {
@@ -565,10 +578,15 @@ export default function App() {
       };
       setHistory(prev => [newItem, ...prev]);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Generation failed", error);
-      alert(t.failed);
+      if (error.name === 'AbortError') {
+         alert(t.failed + " (Timeout: The model took too long to think)");
+      } else {
+         alert(`${t.failed} (${error.message})`);
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
       if (isMobile && sidebarOpen) setSidebarOpen(false);
     }

@@ -10,14 +10,13 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 // Initialize Gemini
-// 1. Try to get GEMINI_BASE_URL from Environment Variables
-// 2. If not found, fallback to the user's Cloudflare Worker (Hardcoded for convenience)
-const BASE_URL = process.env.GEMINI_BASE_URL || 'https://geminibaseurl.3352152798.workers.dev';
-
-const ai = new GoogleGenAI({ 
-  apiKey: process.env.API_KEY,
-  baseUrl: BASE_URL 
-});
+// Clean configuration: Use process.env.API_KEY. 
+// No hardcoded proxies. Vercel (US) connects directly to Google.
+const clientOptions = { apiKey: process.env.API_KEY };
+if (process.env.GEMINI_BASE_URL) {
+  clientOptions.baseUrl = process.env.GEMINI_BASE_URL;
+}
+const ai = new GoogleGenAI(clientOptions);
 
 const promptResponseSchema = {
   type: Type.OBJECT,
@@ -42,8 +41,8 @@ const promptResponseSchema = {
   required: ["optimizedPrompt", "explanation", "technicalDetails"]
 };
 
-app.post('/api/generate', async (req, res) => {
-  try {
+// Helper to construct request parts
+const buildRequestData = (body, modelName) => {
     const { 
       prompt, 
       mediaType, 
@@ -52,14 +51,9 @@ app.post('/api/generate', async (req, res) => {
       outputLang, 
       interfaceLang, 
       uploadedImage 
-    } = req.body;
-
-    const modelName = mode === 'THINKING' 
-      ? 'gemini-3-pro-preview' 
-      : 'gemini-2.5-flash';
+    } = body;
 
     const explainLang = interfaceLang === 'CN' ? 'CHINESE (Simplified)' : 'ENGLISH';
-
     let systemInstruction = '';
 
     if (taskMode === 'OPTIMIZE') {
@@ -140,12 +134,12 @@ app.post('/api/generate', async (req, res) => {
       systemInstruction: systemInstruction,
     };
 
-    if (mode === 'THINKING') {
-      requestConfig.thinkingConfig = { thinkingBudget: 32768 };
+    if (modelName.includes('gemini-3-pro-preview')) {
+        // Reduced budget for Vercel/Serverless timeout prevention
+        requestConfig.thinkingConfig = { thinkingBudget: 1024 };
     }
 
     const contents = [];
-      
     if (taskMode === 'REVERSE' && uploadedImage) {
       const matches = uploadedImage.match(/^data:(.+);base64,(.+)$/);
       if (!matches) {
@@ -172,13 +166,45 @@ app.post('/api/generate', async (req, res) => {
       });
     }
 
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: contents,
-      config: requestConfig
-    });
+    return { model: modelName, contents, config: requestConfig };
+};
 
-    res.json(JSON.parse(response.text));
+app.post('/api/generate', async (req, res) => {
+  try {
+    const { mode } = req.body;
+    
+    // PRIMARY ATTEMPT
+    let modelName = mode === 'THINKING' ? 'gemini-3-pro-preview' : 'gemini-2.5-flash';
+    
+    try {
+        const requestData = buildRequestData(req.body, modelName);
+        console.log(`Attempting generation with ${modelName}...`);
+        
+        const response = await ai.models.generateContent(requestData);
+        res.json(JSON.parse(response.text));
+
+    } catch (primaryError) {
+        console.warn(`Primary model ${modelName} failed:`, primaryError.message);
+
+        // FALLBACK MECHANISM
+        // If Thinking mode failed (likely timeout or overload), fallback to Flash
+        if (mode === 'THINKING') {
+            console.log("Falling back to gemini-2.5-flash...");
+            const fallbackModel = 'gemini-2.5-flash';
+            const fallbackRequestData = buildRequestData(req.body, fallbackModel);
+            
+            const fallbackResponse = await ai.models.generateContent(fallbackRequestData);
+            const result = JSON.parse(fallbackResponse.text);
+            
+            // Annotate explanation to inform user of fallback
+            result.explanation = `(Note: Deep Thinking timed out, switched to Fast mode automatically.) ${result.explanation}`;
+            
+            res.json(result);
+        } else {
+            // If Flash failed, just throw
+            throw primaryError;
+        }
+    }
 
   } catch (error) {
     console.error("Backend Generation Error:", error);

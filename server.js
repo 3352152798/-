@@ -2,26 +2,19 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { GoogleGenAI, Type, Schema } = require("@google/genai");
+const { GoogleGenAI, Type } = require("@google/genai");
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Enable CORS and JSON parsing with increased limit for images
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// Initialize Gemini Client (Server-side only)
-// 1. Try to get GEMINI_BASE_URL from Environment Variables
-// 2. If not found, fallback to the user's Cloudflare Worker (Hardcoded for convenience)
-const BASE_URL = process.env.GEMINI_BASE_URL || 'https://geminibaseurl.3352152798.workers.dev';
-
-const ai = new GoogleGenAI({ 
-  apiKey: process.env.API_KEY,
-  baseUrl: BASE_URL 
-});
-
-// --- Schemas & Constants ---
+const clientOptions = { apiKey: process.env.API_KEY };
+if (process.env.GEMINI_BASE_URL) {
+  clientOptions.baseUrl = process.env.GEMINI_BASE_URL;
+}
+const ai = new GoogleGenAI(clientOptions);
 
 const promptResponseSchema = {
   type: Type.OBJECT,
@@ -46,10 +39,8 @@ const promptResponseSchema = {
   required: ["optimizedPrompt", "explanation", "technicalDetails"]
 };
 
-// --- API Route ---
-
-app.post('/api/generate', async (req, res) => {
-  try {
+// Helper to construct request parts
+const buildRequestData = (body, modelName) => {
     const { 
       prompt, 
       mediaType, 
@@ -58,18 +49,9 @@ app.post('/api/generate', async (req, res) => {
       outputLang, 
       interfaceLang, 
       uploadedImage 
-    } = req.body;
+    } = body;
 
-    // 1. Determine Model
-    // Note: 'mode' comes from frontend enum OptimizationMode ('FAST' or 'THINKING')
-    const modelName = mode === 'THINKING' 
-      ? 'gemini-3-pro-preview' 
-      : 'gemini-2.5-flash';
-
-    // 2. Determine Explain Language
     const explainLang = interfaceLang === 'CN' ? 'CHINESE (Simplified)' : 'ENGLISH';
-
-    // 3. Construct System Instruction (Moved from Frontend to Backend for security)
     let systemInstruction = '';
 
     if (taskMode === 'OPTIMIZE') {
@@ -91,7 +73,6 @@ app.post('/api/generate', async (req, res) => {
       Return ONLY the JSON matching the schema.
       `;
     } else {
-      // REVERSE MODE INSTRUCTION
       if (mediaType === 'VIDEO') {
            systemInstruction = `You are a Visionary Film Director, Screenwriter, and Cinematographer.
            Your task is to analyze the provided image as a "Keyframe" and write a professional video generation prompt (for Sora/Veo/Gen-3) that brings this scene to life.
@@ -145,22 +126,18 @@ app.post('/api/generate', async (req, res) => {
       }
     }
 
-    // 4. Configure Request
     const requestConfig = {
       responseMimeType: "application/json",
       responseSchema: promptResponseSchema,
       systemInstruction: systemInstruction,
     };
 
-    if (mode === 'THINKING') {
-      requestConfig.thinkingConfig = { thinkingBudget: 32768 };
+    if (modelName.includes('gemini-3-pro-preview')) {
+        requestConfig.thinkingConfig = { thinkingBudget: 1024 };
     }
 
-    // 5. Construct Contents
     const contents = [];
-      
     if (taskMode === 'REVERSE' && uploadedImage) {
-      // Split base64 to get data and mimeType
       const matches = uploadedImage.match(/^data:(.+);base64,(.+)$/);
       if (!matches) {
           throw new Error("Invalid image data");
@@ -175,12 +152,7 @@ app.post('/api/generate', async (req, res) => {
       contents.push({
         role: 'user',
         parts: [
-          {
-              inlineData: {
-                  mimeType: mimeType,
-                  data: data
-              }
-          },
+          { inlineData: { mimeType: mimeType, data: data } },
           { text: userMessage }
         ]
       });
@@ -191,15 +163,39 @@ app.post('/api/generate', async (req, res) => {
       });
     }
 
-    // 6. Call Gemini
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: contents,
-      config: requestConfig
-    });
+    return { model: modelName, contents, config: requestConfig };
+};
 
-    // 7. Send Response
-    res.json(JSON.parse(response.text));
+app.post('/api/generate', async (req, res) => {
+  try {
+    const { mode } = req.body;
+    
+    // PRIMARY ATTEMPT
+    let modelName = mode === 'THINKING' ? 'gemini-3-pro-preview' : 'gemini-2.5-flash';
+    
+    try {
+        const requestData = buildRequestData(req.body, modelName);
+        console.log(`Attempting generation with ${modelName}...`);
+        
+        const response = await ai.models.generateContent(requestData);
+        res.json(JSON.parse(response.text));
+
+    } catch (primaryError) {
+        console.warn(`Primary model ${modelName} failed:`, primaryError.message);
+
+        if (mode === 'THINKING') {
+            console.log("Falling back to gemini-2.5-flash...");
+            const fallbackModel = 'gemini-2.5-flash';
+            const fallbackRequestData = buildRequestData(req.body, fallbackModel);
+            
+            const fallbackResponse = await ai.models.generateContent(fallbackRequestData);
+            const result = JSON.parse(fallbackResponse.text);
+            result.explanation = `(Note: Deep Thinking timed out, switched to Fast mode automatically.) ${result.explanation}`;
+            res.json(result);
+        } else {
+            throw primaryError;
+        }
+    }
 
   } catch (error) {
     console.error("Backend Generation Error:", error);
