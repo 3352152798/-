@@ -183,7 +183,7 @@ const generateWithGemini = async (body, modelName, apiKey, baseUrl) => {
 };
 
 // --- Google GenAI Handler (Image Preview) ---
-const generateImageWithGemini = async (body, apiKey) => {
+const generateImageWithGemini = async (body, modelName, apiKey) => {
     const { prompt, mediaType } = body;
     const ai = new GoogleGenAI({ apiKey });
     
@@ -192,17 +192,25 @@ const generateImageWithGemini = async (body, apiKey) => {
         ? `Draw a professional storyboard sheet for the video scene described below. Based on the action's complexity, select an appropriate EVEN number of panels (e.g., 4, 6, or 8). Number the panels sequentially (1, 2, 3, etc.) to depict the narrative flow and camera movements. Arrange them in a clean grid layout. Scene: ${prompt}`
         : prompt;
 
-    // Use gemini-2.5-flash-image for image generation
+    // Use passed modelName or default to gemini-2.5-flash-image
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: modelName || 'gemini-2.5-flash-image',
         contents: { parts: [{ text: imagePrompt }] },
     });
+
+    if (!response.candidates || !response.candidates[0] || !response.candidates[0].content || !response.candidates[0].content.parts) {
+         throw new Error("No candidates returned from Gemini.");
+    }
 
     // Extract the image from parts
     for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) {
             const base64EncodeString = part.inlineData.data;
             return `data:image/png;base64,${base64EncodeString}`;
+        }
+        // If the model refuses (e.g. Safety), it might return text explaining why
+        if (part.text) {
+             throw new Error(`Model Refusal: ${part.text}`);
         }
     }
     
@@ -388,7 +396,8 @@ app.post('/api/generate-image', async (req, res) => {
         if (provider === 'OPENAI') {
              imageUrl = await generateImageWithOpenAI({ prompt, mediaType }, modelName, apiKey, baseUrl);
         } else {
-             imageUrl = await generateImageWithGemini({ prompt, mediaType }, apiKey);
+             // Correctly pass modelName to Gemini function
+             imageUrl = await generateImageWithGemini({ prompt, mediaType }, modelName, apiKey);
         }
 
         res.json({ imageUrl });

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 // REMOVED: import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { MediaType, OptimizationMode, PromptResult, HistoryItem, InterfaceLanguage, OutputLanguage, TaskMode, Preset, ModelProvider, ModelConfig } from './types';
@@ -418,14 +417,16 @@ const VisualPreview = ({
             });
 
             if (!response.ok) {
-                throw new Error('Failed to generate image');
+                // Try to parse error message from backend
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.details || errData.error || 'Failed to generate image');
             }
 
             const data = await response.json();
             setImage(data.imageUrl);
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            setError(t.previewFailed);
+            setError(e.message || t.previewFailed);
         } finally {
             setLoading(false);
         }
@@ -472,9 +473,10 @@ const VisualPreview = ({
             )}
 
             {error && (
-                <div className="text-center py-8 text-red-400 text-sm">
-                    {error} <br/>
-                    <button onClick={generatePreview} className="underline mt-2 hover:text-red-300">Retry</button>
+                <div className="text-center py-8 text-red-400 text-sm px-4">
+                    <div className="font-medium mb-1">{t.previewFailed}</div>
+                    <div className="text-xs text-red-400/70 mb-3 break-words max-w-md mx-auto">{error}</div>
+                    <button onClick={generatePreview} className="underline hover:text-red-300 text-xs uppercase tracking-wider">Retry</button>
                 </div>
             )}
 
