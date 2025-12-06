@@ -194,10 +194,12 @@ const generateImageWithGemini = async (body, modelName, apiKey) => {
         ? `Draw a professional storyboard sheet for the video scene described below. Based on the action's complexity, select an appropriate EVEN number of panels (e.g., 4, 6, or 8). Number the panels sequentially (1, 2, 3, etc.) to depict the narrative flow and camera movements. Arrange them in a clean grid layout. Scene: ${prompt}`
         : prompt;
 
-    // Use passed modelName or default to gemini-2.5-flash-image
+    // Use passed modelName or default to gemini-2.0-flash-exp for better free tier availability
+    const targetModel = modelName || 'gemini-2.0-flash-exp';
+
     const response = await ai.models.generateContent({
-        model: modelName || 'gemini-2.5-flash-image',
-        contents: { parts: [{ text: imagePrompt }] },
+        model: targetModel,
+        contents: [{ parts: [{ text: imagePrompt }] }],
     });
 
     if (!response.candidates || !response.candidates[0] || !response.candidates[0].content || !response.candidates[0].content.parts) {
@@ -406,6 +408,12 @@ app.post('/api/generate-image', async (req, res) => {
 
     } catch (error) {
         console.error("Image Generation Error:", error);
+        
+        // Handle Rate Limits (429) specifically
+        if (error.message && (error.message.includes('429') || error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('Quota exceeded'))) {
+            return res.status(429).json({ error: "Rate limit exceeded", details: error.message });
+        }
+
         res.status(500).json({ error: "Failed to generate image preview", details: error.message });
     }
 });

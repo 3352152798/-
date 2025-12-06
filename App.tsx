@@ -171,6 +171,7 @@ const translations = {
     generatingPreview: "绘制中...",
     previewFailed: "预览生成失败",
     clickToEnlarge: "点击放大",
+    quotaExceeded: "请求过于频繁，正在自动重试...",
   },
   [InterfaceLanguage.EN]: {
     appTitle: "Prompt Alchemy",
@@ -232,6 +233,7 @@ const translations = {
     generatingPreview: "Painting...",
     previewFailed: "Preview failed",
     clickToEnlarge: "Click to Enlarge",
+    quotaExceeded: "Rate limit exceeded, retrying automatically...",
   }
 };
 
@@ -392,6 +394,7 @@ const VisualPreview = ({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isZoomed, setIsZoomed] = useState(false);
+    const [retryCount, setRetryCount] = useState(0);
     const t = translations[lang];
 
     // Reset local state if prompt changes (new generation) and no existing image passed
@@ -399,12 +402,21 @@ const VisualPreview = ({
         if (!existingImage) {
             setImage(null);
             setError(null);
+            setRetryCount(0); // Reset retry count
         }
     }, [prompt, existingImage]);
 
-    const generatePreview = async () => {
+    // Wrapper to handle the logic flow cleaner
+    const handleGenerateClick = () => {
+        setRetryCount(0);
+        executeGenerate(0);
+    };
+
+    const executeGenerate = async (attempt: number) => {
         setLoading(true);
-        setError(null);
+        // Don't clear error if it's a retry message
+        if (attempt === 0) setError(null);
+
         try {
             const response = await fetch('/api/generate-image', {
                 method: 'POST',
@@ -412,23 +424,44 @@ const VisualPreview = ({
                 body: JSON.stringify({
                     prompt,
                     mediaType,
-                    modelConfig // Pass the config to check API Key (though server uses default for now)
+                    modelConfig
                 })
             });
 
+             if (response.status === 429) {
+                if (attempt < 3) {
+                    const nextRetry = attempt + 1;
+                    const delay = 3000; // Fixed 3s delay is usually enough for Gemini free tier
+                    
+                    setError(t.quotaExceeded + ` (${nextRetry}/3)`);
+                    
+                    setTimeout(() => {
+                        executeGenerate(nextRetry);
+                    }, delay);
+                    return; // Keep loading true, exit this execution
+                }
+            }
+
             if (!response.ok) {
-                // Try to parse error message from backend
-                const errData = await response.json().catch(() => ({}));
+                 const errData = await response.json().catch(() => ({}));
+                 if (response.status === 400 && errData.error && errData.error.includes("API Key")) {
+                     throw new Error("API_KEY_MISSING");
+                }
                 throw new Error(errData.details || errData.error || 'Failed to generate image');
             }
 
             const data = await response.json();
             setImage(data.imageUrl);
+            setError(null);
+            setLoading(false); // Success!
+
         } catch (e: any) {
-            console.error(e);
-            setError(e.message || t.previewFailed);
-        } finally {
-            setLoading(false);
+            setLoading(false); // Error occurred, stop loading
+            if (e.message === "API_KEY_MISSING") {
+                setError("API_KEY_MISSING");
+            } else {
+                setError(e.message || t.previewFailed);
+            }
         }
     };
 
@@ -452,7 +485,7 @@ const VisualPreview = ({
             {!image && !loading && !error && (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                     <button 
-                        onClick={generatePreview}
+                        onClick={handleGenerateClick}
                         className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/30 rounded-full transition-all hover:shadow-lg hover:shadow-purple-500/20 font-medium flex items-center gap-2 group-hover:scale-105"
                     >
                          {t.generatePreview}
@@ -468,15 +501,33 @@ const VisualPreview = ({
             {loading && (
                 <div className="flex flex-col items-center justify-center py-12">
                      <div className="w-8 h-8 border-4 border-slate-700 border-t-purple-500 rounded-full animate-spin mb-3"></div>
-                     <span className="text-slate-400 text-sm animate-pulse">{t.generatingPreview}</span>
+                     <span className="text-slate-400 text-sm animate-pulse">{error || t.generatingPreview}</span>
                 </div>
             )}
 
-            {error && (
+            {error && !loading && (
                 <div className="text-center py-8 text-red-400 text-sm px-4">
-                    <div className="font-medium mb-1">{t.previewFailed}</div>
-                    <div className="text-xs text-red-400/70 mb-3 break-words max-w-md mx-auto">{error}</div>
-                    <button onClick={generatePreview} className="underline hover:text-red-300 text-xs uppercase tracking-wider">Retry</button>
+                    <div className="font-medium mb-1">{error === "API_KEY_MISSING" ? "API Key Missing" : t.previewFailed}</div>
+                    
+                    {error === "API_KEY_MISSING" ? (
+                        <div className="flex flex-col items-center gap-2">
+                            <p className="text-xs text-slate-500">Please configure your API Key in Settings.</p>
+                            <button 
+                                onClick={() => {
+                                    const settingsBtn = document.querySelector<HTMLButtonElement>('button[title="Settings"]') || document.querySelector<HTMLButtonElement>('button[title="模型设置"]');
+                                    settingsBtn?.click();
+                                }}
+                                className="mt-2 px-4 py-1.5 bg-slate-800 border border-slate-700 rounded text-xs hover:bg-slate-700 transition-colors"
+                            >
+                                {t.settingsTitle}
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="text-xs text-red-400/70 mb-3 break-words max-w-md mx-auto">{error}</div>
+                            <button onClick={handleGenerateClick} className="underline hover:text-red-300 text-xs uppercase tracking-wider">Retry</button>
+                        </>
+                    )}
                 </div>
             )}
 
@@ -791,7 +842,7 @@ const DEFAULT_VISION_CONFIG: ModelConfig = {
 
 const DEFAULT_PREVIEW_CONFIG: ModelConfig = {
     provider: ModelProvider.GOOGLE,
-    modelName: 'gemini-2.5-flash-image',
+    modelName: 'gemini-2.0-flash-exp', // Changed default to 2.0-flash-exp for better free tier support
     apiKey: '',
     baseUrl: ''
 };
@@ -868,7 +919,15 @@ export default function App() {
     
     const savedPreviewConfig = localStorage.getItem('prompt_alchemy_preview_config');
     if (savedPreviewConfig) {
-         try { setPreviewModelConfig({ ...DEFAULT_PREVIEW_CONFIG, ...JSON.parse(savedPreviewConfig) }); } catch (e) {}
+         try { 
+             const parsed = JSON.parse(savedPreviewConfig);
+             // AUTO-MIGRATION: If user has the broken 'gemini-2.5-flash-image' saved, force update to 'gemini-2.0-flash-exp'
+             if (parsed.modelName === 'gemini-2.5-flash-image' || parsed.modelName === 'gemini-2.5-flash-preview-image') {
+                 console.log("Migrating deprecated image model to gemini-2.0-flash-exp");
+                 parsed.modelName = 'gemini-2.0-flash-exp';
+             }
+             setPreviewModelConfig({ ...DEFAULT_PREVIEW_CONFIG, ...parsed }); 
+         } catch (e) { localStorage.removeItem('prompt_alchemy_preview_config'); }
     }
 
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
