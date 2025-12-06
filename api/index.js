@@ -117,7 +117,7 @@ const getSystemInstruction = (taskMode, mediaType, outputLang, interfaceLang) =>
     }
 };
 
-// --- Google GenAI Handler ---
+// --- Google GenAI Handler (Text) ---
 const generateWithGemini = async (body, modelName, apiKey, baseUrl) => {
     const { 
       prompt, 
@@ -182,7 +182,74 @@ const generateWithGemini = async (body, modelName, apiKey, baseUrl) => {
     }
 };
 
-// --- OpenAI Compatible Handler ---
+// --- Google GenAI Handler (Image Preview) ---
+const generateImageWithGemini = async (body, apiKey) => {
+    const { prompt, mediaType } = body;
+    const ai = new GoogleGenAI({ apiKey });
+    
+    // For Video, we modify the prompt to ask for a storyboard
+    const imagePrompt = mediaType === 'VIDEO'
+        ? `Draw a professional storyboard sheet for the video scene described below. Based on the action's complexity, select an appropriate EVEN number of panels (e.g., 4, 6, or 8). Number the panels sequentially (1, 2, 3, etc.) to depict the narrative flow and camera movements. Arrange them in a clean grid layout. Scene: ${prompt}`
+        : prompt;
+
+    // Use gemini-2.5-flash-image for image generation
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: [{ text: imagePrompt }] },
+    });
+
+    // Extract the image from parts
+    for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+            const base64EncodeString = part.inlineData.data;
+            return `data:image/png;base64,${base64EncodeString}`;
+        }
+    }
+    
+    throw new Error("No image generated.");
+};
+
+// --- OpenAI Compatible Handler (Image) ---
+const generateImageWithOpenAI = async (body, modelName, apiKey, baseUrl) => {
+    const { prompt, mediaType } = body;
+    
+    const url = (baseUrl ? baseUrl.replace(/\/$/, '') : 'https://api.openai.com/v1') + '/images/generations';
+    
+    const imagePrompt = mediaType === 'VIDEO'
+        ? `Draw a professional storyboard sheet for the video scene described below. Based on the action's complexity, select an appropriate EVEN number of panels (e.g., 4, 6, or 8). Number the panels sequentially (1, 2, 3, etc.) to depict the narrative flow and camera movements. Arrange them in a clean grid layout. Scene: ${prompt}`
+        : prompt;
+
+    const payload = {
+        model: modelName || "dall-e-3",
+        prompt: imagePrompt.substring(0, 4000), // OpenAI limits
+        n: 1,
+        size: "1024x1024",
+        response_format: "b64_json"
+    };
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`OpenAI Image Error: ${response.status} - ${errText}`);
+    }
+
+    const data = await response.json();
+    if (data.data && data.data.length > 0) {
+        return `data:image/png;base64,${data.data[0].b64_json}`;
+    }
+    throw new Error("No image generated.");
+};
+
+
+// --- OpenAI Compatible Handler (Text) ---
 const generateWithOpenAI = async (body, modelName, apiKey, baseUrl) => {
     const { 
       prompt, 
@@ -245,23 +312,20 @@ const generateWithOpenAI = async (body, modelName, apiKey, baseUrl) => {
     return JSON.parse(content);
 };
 
-// --- Main Route ---
+// --- Main Route (Text Generation) ---
 app.post('/api/generate', async (req, res) => {
   try {
     const { mode, interfaceLang, modelConfig } = req.body;
     
-    // Determine configuration
     const provider = modelConfig?.provider || 'GOOGLE';
     let modelName = modelConfig?.modelName;
     let apiKey = modelConfig?.apiKey;
     let baseUrl = modelConfig?.baseUrl;
 
-    // Set Defaults if missing
     if (provider === 'GOOGLE') {
         if (!modelName) modelName = 'gemini-2.5-flash';
         if (!apiKey) apiKey = process.env.API_KEY; 
     } else {
-        // OpenAI Compatible defaults
         if (!modelName) modelName = 'gpt-4o';
         if (!apiKey) {
             return res.status(400).json({ error: "API Key is required for custom OpenAI compatible models." });
@@ -271,16 +335,13 @@ app.post('/api/generate', async (req, res) => {
     let result;
 
     if (provider === 'OPENAI') {
-        console.log(`Using OpenAI Compatible Provider: ${modelName}`);
         result = await generateWithOpenAI(req.body, modelName, apiKey, baseUrl);
     } else {
-        console.log(`Using Google Provider: ${modelName} (Thinking: ${mode === 'THINKING'})`);
         try {
             result = await generateWithGemini(req.body, modelName, apiKey, baseUrl);
         } catch (error) {
-             // FALLBACK for Google Thinking Mode Timeout
              if (mode === 'THINKING') {
-                console.warn("Thinking mode failed, retrying with Fast mode (Google default)...");
+                console.warn("Thinking mode failed, retrying with Fast mode...");
                 const fallbackBody = { ...req.body, mode: 'FAST' };
                 result = await generateWithGemini(fallbackBody, 'gemini-2.5-flash', apiKey, baseUrl);
                 
@@ -302,6 +363,40 @@ app.post('/api/generate', async (req, res) => {
     console.error("Backend Generation Error:", error);
     res.status(500).json({ error: "Failed to generate prompt", details: error.message });
   }
+});
+
+// --- Image Preview Route ---
+app.post('/api/generate-image', async (req, res) => {
+    try {
+        const { prompt, mediaType, modelConfig } = req.body;
+        
+        const provider = modelConfig?.provider || 'GOOGLE';
+        let modelName = modelConfig?.modelName;
+        let apiKey = modelConfig?.apiKey;
+        let baseUrl = modelConfig?.baseUrl;
+
+        // Default logic for Key if not provided in custom config
+        if (provider === 'GOOGLE' && !apiKey) {
+             apiKey = process.env.API_KEY;
+        }
+
+        if (!apiKey) {
+             return res.status(400).json({ error: "API Key not configured for image generation." });
+        }
+
+        let imageUrl;
+        if (provider === 'OPENAI') {
+             imageUrl = await generateImageWithOpenAI({ prompt, mediaType }, modelName, apiKey, baseUrl);
+        } else {
+             imageUrl = await generateImageWithGemini({ prompt, mediaType }, apiKey);
+        }
+
+        res.json({ imageUrl });
+
+    } catch (error) {
+        console.error("Image Generation Error:", error);
+        res.status(500).json({ error: "Failed to generate image preview", details: error.message });
+    }
 });
 
 export default app;

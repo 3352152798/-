@@ -35,9 +35,9 @@ const TrashIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   </svg>
 );
 
-const MenuIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+const SidebarTriggerIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h12m-12 5.25h16.5" />
   </svg>
 );
 
@@ -96,6 +96,18 @@ const Cog6ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
   </svg>
 );
 
+const GoogleIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .533 5.347.533 12S5.867 24 12.48 24c3.44 0 6.013-1.133 8.053-3.24 2.067-2.107 2.68-5.053 2.68-7.453 0-.733-.08-1.453-.213-2.133h-10.52z"/>
+    </svg>
+);
+
+const OpenAIIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M22.2819 9.82116L12.0002 3.88516C11.6669 3.69266 11.2605 3.69266 10.9272 3.88516L0.64549 9.82116C0.312157 10.0137 0.10376 10.3751 0.10376 10.7602V22.6312C0.10376 23.0163 0.312157 23.3777 0.64549 23.5702L10.9272 29.5062C11.0939 29.6025 11.2814 29.6506 11.4688 29.6506C11.6563 29.6506 11.8438 29.6025 12.0105 29.5062L22.2922 23.5702C22.6255 23.3777 22.8339 23.0163 22.8339 22.6312V10.7602C22.8235 10.3751 22.6152 10.0137 22.2819 9.82116ZM18.7819 21.0812L15.3444 19.0987V13.8437L20.4485 16.7912L18.7819 21.0812ZM11.4688 27.2762L4.62549 23.3287V15.4337L11.4688 19.3837V27.2762ZM4.15674 13.8437V8.58866L7.59424 6.60616L9.26091 10.8962L4.15674 13.8437ZM12.0002 12.8337L5.15674 8.88366L12.0002 4.93366L18.8435 8.88366L12.0002 12.8337ZM16.4069 6.60616L19.8444 8.58866V13.8437L14.7402 10.8962L16.4069 6.60616Z" transform="translate(0.53 3.65) scale(0.65)"/>
+    </svg>
+);
+
 
 // --- Translations ---
 
@@ -147,13 +159,19 @@ const translations = {
     fallbackToast: "深度思考超时，已自动切换为快速模式",
     textModel: "文本模型 (提示词优化)",
     visionModel: "视觉模型 (图片反推)",
+    previewModel: "视觉预览模型",
     provider: "提供商",
     modelName: "模型名称",
     apiKey: "API Key",
     baseUrl: "API Base URL",
     saveSettings: "保存设置",
     default: "默认",
-    custom: "自定义"
+    custom: "自定义",
+    visualPreview: "视觉预览",
+    generatePreview: "🔮 召唤画面",
+    generatingPreview: "绘制中...",
+    previewFailed: "预览生成失败",
+    clickToEnlarge: "点击放大",
   },
   [InterfaceLanguage.EN]: {
     appTitle: "Prompt Alchemy",
@@ -202,13 +220,19 @@ const translations = {
     fallbackToast: "Thinking mode timed out, switched to Fast mode automatically",
     textModel: "Text Model (Optimize)",
     visionModel: "Vision Model (Reverse)",
+    previewModel: "Visual Preview Model",
     provider: "Provider",
     modelName: "Model Name",
     apiKey: "API Key",
     baseUrl: "API Base URL",
     saveSettings: "Save Settings",
     default: "Default",
-    custom: "Custom"
+    custom: "Custom",
+    visualPreview: "Visual Preview",
+    generatePreview: "🔮 Conjure Vision",
+    generatingPreview: "Painting...",
+    previewFailed: "Preview failed",
+    clickToEnlarge: "Click to Enlarge",
   }
 };
 
@@ -242,9 +266,236 @@ const resizeImage = (base64Str: string, maxWidth = 300): Promise<string> => {
   });
 };
 
+function useOnClickOutside(ref: React.RefObject<HTMLElement | null>, handler: (event: MouseEvent | TouchEvent) => void) {
+  useEffect(
+    () => {
+      const listener = (event: MouseEvent | TouchEvent) => {
+        // Do nothing if clicking ref's element or descendent elements
+        if (!ref.current || ref.current.contains(event.target as Node)) {
+          return;
+        }
+        handler(event);
+      };
+      document.addEventListener("mousedown", listener);
+      document.addEventListener("touchstart", listener);
+      return () => {
+        document.removeEventListener("mousedown", listener);
+        document.removeEventListener("touchstart", listener);
+      };
+    },
+    [ref, handler]
+  );
+}
+
+// --- Custom Components ---
+
+interface SelectOption {
+    label: string;
+    value: string;
+    icon?: React.ReactNode;
+}
+
+const CustomSelect = ({ 
+    options, 
+    value, 
+    onChange, 
+    icon,
+    className = "",
+    dropdownClassName = "",
+    direction = "down"
+}: { 
+    options: SelectOption[], 
+    value: string, 
+    onChange: (val: string) => void,
+    icon?: React.ReactNode,
+    className?: string,
+    dropdownClassName?: string,
+    direction?: "up" | "down"
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+    
+    useOnClickOutside(ref, () => setIsOpen(false));
+
+    const selectedOption = options.find(o => o.value === value) || options[0];
+
+    return (
+        <div className={`relative ${className}`} ref={ref}>
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className={`w-full flex items-center justify-between gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 hover:border-slate-600 transition-colors focus:outline-none focus:border-indigo-500 ${isOpen ? 'border-indigo-500 ring-1 ring-indigo-500/20' : ''}`}
+            >
+                <div className="flex items-center gap-2 truncate">
+                    {icon && <span className="text-slate-400 flex-shrink-0">{icon}</span>}
+                    {selectedOption?.icon && <span className="text-indigo-400 flex-shrink-0">{selectedOption.icon}</span>}
+                    <span className="truncate">{selectedOption?.label}</span>
+                </div>
+                <svg 
+                    className={`w-4 h-4 text-slate-500 transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} 
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+            </button>
+
+            {isOpen && (
+                <div className={`absolute z-50 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-xl overflow-hidden animate-fade-in-up ${direction === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'} ${dropdownClassName}`}>
+                    <div className="max-h-60 overflow-y-auto custom-scrollbar p-1">
+                        {options.map((opt) => (
+                            <button
+                                key={opt.value}
+                                onClick={() => {
+                                    onChange(opt.value);
+                                    setIsOpen(false);
+                                }}
+                                className={`w-full text-left px-3 py-2 text-sm rounded-md flex items-center gap-2 transition-colors
+                                    ${opt.value === value 
+                                        ? 'bg-indigo-600/20 text-indigo-300' 
+                                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                    }
+                                `}
+                            >
+                                {opt.icon && <span className={`flex-shrink-0 ${opt.value === value ? "text-indigo-400" : "text-slate-500"}`}>{opt.icon}</span>}
+                                <span className="truncate">{opt.label}</span>
+                                {opt.value === value && (
+                                    <svg className="w-4 h-4 ml-auto text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                    </svg>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
 type SidebarTab = 'HISTORY' | 'PRESETS';
 
 // --- Components ---
+
+const VisualPreview = ({ 
+    prompt, 
+    mediaType, 
+    lang, 
+    modelConfig,
+    existingImage
+}: { 
+    prompt: string, 
+    mediaType: MediaType, 
+    lang: InterfaceLanguage,
+    modelConfig: ModelConfig,
+    existingImage?: string
+}) => {
+    const [image, setImage] = useState<string | null>(existingImage || null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isZoomed, setIsZoomed] = useState(false);
+    const t = translations[lang];
+
+    // Reset local state if prompt changes (new generation) and no existing image passed
+    useEffect(() => {
+        if (!existingImage) {
+            setImage(null);
+            setError(null);
+        }
+    }, [prompt, existingImage]);
+
+    const generatePreview = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await fetch('/api/generate-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt,
+                    mediaType,
+                    modelConfig // Pass the config to check API Key (though server uses default for now)
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate image');
+            }
+
+            const data = await response.json();
+            setImage(data.imageUrl);
+        } catch (e) {
+            console.error(e);
+            setError(t.previewFailed);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="bg-slate-900/60 backdrop-blur-sm border border-slate-800 rounded-xl p-6 relative overflow-hidden group">
+             {isZoomed && image && (
+                <div 
+                    className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+                    onClick={() => setIsZoomed(false)}
+                >
+                    <img src={image} className="max-w-full max-h-full rounded-lg shadow-2xl" alt="Preview" />
+                </div>
+            )}
+
+            <div className="flex justify-between items-center mb-4">
+                 <h3 className="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
+                    <PhotoIcon className="w-4 h-4" /> {t.visualPreview}
+                </h3>
+            </div>
+
+            {!image && !loading && !error && (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <button 
+                        onClick={generatePreview}
+                        className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-500/30 rounded-full transition-all hover:shadow-lg hover:shadow-purple-500/20 font-medium flex items-center gap-2 group-hover:scale-105"
+                    >
+                         {t.generatePreview}
+                    </button>
+                    {mediaType === MediaType.VIDEO && (
+                        <p className="text-xs text-slate-500 mt-2">
+                            (Generates an adaptive storyboard)
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {loading && (
+                <div className="flex flex-col items-center justify-center py-12">
+                     <div className="w-8 h-8 border-4 border-slate-700 border-t-purple-500 rounded-full animate-spin mb-3"></div>
+                     <span className="text-slate-400 text-sm animate-pulse">{t.generatingPreview}</span>
+                </div>
+            )}
+
+            {error && (
+                <div className="text-center py-8 text-red-400 text-sm">
+                    {error} <br/>
+                    <button onClick={generatePreview} className="underline mt-2 hover:text-red-300">Retry</button>
+                </div>
+            )}
+
+            {image && !loading && (
+                <div className="relative rounded-lg overflow-hidden border border-slate-700/50 shadow-xl group/img">
+                    <img 
+                        src={image} 
+                        alt="Visual Preview" 
+                        className="w-full h-auto cursor-zoom-in"
+                        onClick={() => setIsZoomed(true)}
+                    />
+                    <div className="absolute bottom-2 right-2 opacity-0 group-hover/img:opacity-100 transition-opacity">
+                         <span className="bg-black/60 text-white text-[10px] px-2 py-1 rounded-full pointer-events-none">
+                            {t.clickToEnlarge}
+                         </span>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const FallbackToast = ({ message, visible }: { message: string, visible: boolean }) => {
     if (!visible) return null;
@@ -258,17 +509,24 @@ const FallbackToast = ({ message, visible }: { message: string, visible: boolean
     );
 };
 
-const SettingsModal = ({ isOpen, onClose, lang, textConfig, setTextConfig, visionConfig, setVisionConfig }: { 
+const SettingsModal = ({ isOpen, onClose, lang, textConfig, setTextConfig, visionConfig, setVisionConfig, previewConfig, setPreviewConfig }: { 
     isOpen: boolean, 
     onClose: () => void, 
     lang: InterfaceLanguage,
     textConfig: ModelConfig,
     setTextConfig: (c: ModelConfig) => void,
     visionConfig: ModelConfig,
-    setVisionConfig: (c: ModelConfig) => void
+    setVisionConfig: (c: ModelConfig) => void,
+    previewConfig: ModelConfig,
+    setPreviewConfig: (c: ModelConfig) => void
 }) => {
     if (!isOpen) return null;
     const t = translations[lang];
+    
+    const providerOptions: SelectOption[] = [
+        { label: "Google GenAI (Gemini)", value: ModelProvider.GOOGLE, icon: <GoogleIcon /> },
+        { label: "OpenAI Compatible", value: ModelProvider.OPENAI, icon: <OpenAIIcon /> }
+    ];
 
     const ConfigSection = ({ title, config, setConfig }: { title: string, config: ModelConfig, setConfig: (c: ModelConfig) => void }) => (
         <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 space-y-3">
@@ -279,14 +537,11 @@ const SettingsModal = ({ isOpen, onClose, lang, textConfig, setTextConfig, visio
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label className="block text-xs text-slate-400 mb-1">{t.provider}</label>
-                    <select 
+                    <CustomSelect 
+                        options={providerOptions}
                         value={config.provider}
-                        onChange={(e) => setConfig({ ...config, provider: e.target.value as ModelProvider })}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
-                    >
-                        <option value={ModelProvider.GOOGLE}>Google GenAI (Gemini)</option>
-                        <option value={ModelProvider.OPENAI}>OpenAI Compatible</option>
-                    </select>
+                        onChange={(val) => setConfig({ ...config, provider: val as ModelProvider })}
+                    />
                 </div>
                 <div>
                     <label className="block text-xs text-slate-400 mb-1">{t.modelName}</label>
@@ -295,7 +550,7 @@ const SettingsModal = ({ isOpen, onClose, lang, textConfig, setTextConfig, visio
                         value={config.modelName}
                         onChange={(e) => setConfig({ ...config, modelName: e.target.value })}
                         placeholder={config.provider === ModelProvider.GOOGLE ? "gemini-2.5-flash" : "gpt-4o"}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none placeholder-slate-600"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none placeholder-slate-600 h-[38px]"
                     />
                 </div>
                 <div className="md:col-span-2">
@@ -336,6 +591,7 @@ const SettingsModal = ({ isOpen, onClose, lang, textConfig, setTextConfig, visio
                 <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
                     <ConfigSection title={t.textModel} config={textConfig} setConfig={setTextConfig} />
                     <ConfigSection title={t.visionModel} config={visionConfig} setConfig={setVisionConfig} />
+                    <ConfigSection title={t.previewModel} config={previewConfig} setConfig={setPreviewConfig} />
                 </div>
                 <div className="p-4 border-t border-slate-800 bg-slate-950/30 rounded-b-2xl text-center">
                     <button 
@@ -472,7 +728,7 @@ const HelpModal = ({ isOpen, onClose, lang }: { isOpen: boolean, onClose: () => 
             <Cog6ToothIcon /> Model Settings
           </h3>
           <p className="text-slate-300 text-sm leading-relaxed">
-             Click the gear icon in the sidebar to customize backend models. You can switch between Google Gemini or OpenAI Compatible providers (e.g., GPT-4o, DeepSeek) and configure Text Generation and Vision Analysis models separately.
+             Click the gear icon in the sidebar to customize backend models. You can switch between Google Gemini or OpenAI Compatible (e.g., GPT-4o, DeepSeek) and configure Text Generation and Vision Analysis models separately.
           </p>
       </section>
 
@@ -531,6 +787,13 @@ const DEFAULT_VISION_CONFIG: ModelConfig = {
     baseUrl: ''
 };
 
+const DEFAULT_PREVIEW_CONFIG: ModelConfig = {
+    provider: ModelProvider.GOOGLE,
+    modelName: 'gemini-2.5-flash-image',
+    apiKey: '',
+    baseUrl: ''
+};
+
 export default function App() {
   const [prompt, setPrompt] = useState('');
   const [mediaType, setMediaType] = useState<MediaType>(MediaType.IMAGE);
@@ -546,6 +809,7 @@ export default function App() {
   // Model Settings State
   const [textModelConfig, setTextModelConfig] = useState<ModelConfig>(DEFAULT_TEXT_CONFIG);
   const [visionModelConfig, setVisionModelConfig] = useState<ModelConfig>(DEFAULT_VISION_CONFIG);
+  const [previewModelConfig, setPreviewModelConfig] = useState<ModelConfig>(DEFAULT_PREVIEW_CONFIG);
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PromptResult | null>(null);
@@ -563,6 +827,14 @@ export default function App() {
   const [showFallbackToast, setShowFallbackToast] = useState(false);
 
   const t = translations[interfaceLang];
+
+  // Output Language Options
+  const outputLangOptions: SelectOption[] = [
+      { label: t.outCN, value: OutputLanguage.CN },
+      { label: t.outEN, value: OutputLanguage.EN },
+      { label: t.outJP, value: OutputLanguage.JP },
+      { label: t.outKR, value: OutputLanguage.KR },
+  ];
 
   // Load data & settings on mount
   useEffect(() => {
@@ -590,6 +862,11 @@ export default function App() {
     const savedVisionConfig = localStorage.getItem('prompt_alchemy_vision_config');
     if (savedVisionConfig) {
          try { setVisionModelConfig({ ...DEFAULT_VISION_CONFIG, ...JSON.parse(savedVisionConfig) }); } catch (e) {}
+    }
+    
+    const savedPreviewConfig = localStorage.getItem('prompt_alchemy_preview_config');
+    if (savedPreviewConfig) {
+         try { setPreviewModelConfig({ ...DEFAULT_PREVIEW_CONFIG, ...JSON.parse(savedPreviewConfig) }); } catch (e) {}
     }
 
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -621,6 +898,10 @@ export default function App() {
   useEffect(() => {
       localStorage.setItem('prompt_alchemy_vision_config', JSON.stringify(visionModelConfig));
   }, [visionModelConfig]);
+  
+  useEffect(() => {
+      localStorage.setItem('prompt_alchemy_preview_config', JSON.stringify(previewModelConfig));
+  }, [previewModelConfig]);
 
   // Reset result when switching tasks
   useEffect(() => {
@@ -830,6 +1111,8 @@ export default function App() {
         setTextConfig={setTextModelConfig}
         visionConfig={visionModelConfig}
         setVisionConfig={setVisionModelConfig}
+        previewConfig={previewModelConfig}
+        setPreviewConfig={setPreviewModelConfig}
       />
       
       {/* Fallback Toast */}
@@ -1023,8 +1306,11 @@ export default function App() {
         {/* Header (Mobile only toggle) */}
         <header className="lg:hidden p-4 flex items-center border-b border-slate-800 bg-slate-900/50 backdrop-blur-md z-10 sticky top-0 justify-between">
           <div className="flex items-center">
-            <button onClick={() => setSidebarOpen(true)} className="text-slate-300 mr-4">
-              <MenuIcon />
+            <button 
+                onClick={() => setSidebarOpen(true)} 
+                className="text-slate-300 mr-4 p-2 -ml-2 rounded-lg hover:bg-slate-800 hover:text-indigo-400 transition-colors active:scale-95"
+            >
+              <SidebarTriggerIcon className="w-8 h-8" />
             </button>
             <span className="font-bold text-lg">{t.newGen}</span>
           </div>
@@ -1055,7 +1341,8 @@ export default function App() {
                  </div>
              </div>
 
-            <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800 rounded-2xl p-1 shadow-lg overflow-hidden">
+            {/* Note: Removed overflow-hidden to allow custom dropdowns to display correctly */}
+            <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800 rounded-2xl p-1 shadow-lg">
               
               {/* Input Area */}
               {taskMode === TaskMode.OPTIMIZE ? (
@@ -1124,7 +1411,7 @@ export default function App() {
               )}
 
               {/* Controls Footer */}
-              <div className="flex flex-col xl:flex-row justify-between items-center p-3 gap-4 border-t border-slate-800/50 bg-slate-900/30 rounded-b-xl">
+              <div className="flex flex-col xl:flex-row justify-between items-center p-3 gap-4 border-t border-slate-800/50 bg-slate-900/30 rounded-b-xl relative z-10">
                 
                 <div className="flex flex-wrap gap-2 w-full xl:w-auto justify-center xl:justify-start">
                   {/* Media Type */}
@@ -1163,18 +1450,15 @@ export default function App() {
                   </div>
 
                   {/* Output Language Selector */}
-                  <div className="flex items-center bg-slate-800 rounded-lg px-3 py-1.5 border border-slate-700">
+                  <div className="flex items-center">
                      <span className="text-xs text-slate-400 mr-2 whitespace-nowrap">{t.outputLang}:</span>
-                     <select 
+                     <CustomSelect 
+                       options={outputLangOptions}
                        value={outputLang}
-                       onChange={(e) => setOutputLang(e.target.value as OutputLanguage)}
-                       className="bg-transparent text-sm text-slate-200 focus:outline-none cursor-pointer"
-                     >
-                        <option value={OutputLanguage.CN}>{t.outCN}</option>
-                        <option value={OutputLanguage.EN}>{t.outEN}</option>
-                        <option value={OutputLanguage.JP}>{t.outJP}</option>
-                        <option value={OutputLanguage.KR}>{t.outKR}</option>
-                     </select>
+                       onChange={(val) => setOutputLang(val as OutputLanguage)}
+                       className="w-32"
+                       direction="up" // Opens upward to avoid being cut off
+                     />
                   </div>
                 </div>
 
@@ -1230,6 +1514,17 @@ export default function App() {
               {/* Details Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
+                {/* Visual Preview Card (New) */}
+                <div className="md:col-span-2">
+                    <VisualPreview 
+                        prompt={result.optimizedPrompt} 
+                        mediaType={mediaType} 
+                        lang={interfaceLang}
+                        modelConfig={previewModelConfig} // Use specific preview config
+                        existingImage={result.generatedImage}
+                    />
+                </div>
+
                 {/* Explanation Card */}
                 <div className="bg-slate-900/60 backdrop-blur-sm border border-slate-800 rounded-xl p-6">
                   <div className="flex justify-between items-center mb-3">
